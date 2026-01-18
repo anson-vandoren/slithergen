@@ -132,6 +132,34 @@ pub struct Args {
     /// positional count argument. if provided, behaves like --count and --all
     #[argh(positional)]
     pub count_pos: Option<u32>,
+
+    /// input file to load and display (skips generation)
+    #[argh(option)]
+    pub load: Option<String>,
+
+    /// display the generated or loaded puzzle in terminal
+    #[argh(switch)]
+    pub display: bool,
+
+    /// output format (currently only 'binary-full' is supported)
+    #[argh(
+        option,
+        from_str_fn(output_format_from_str),
+        default = "OutputFormat::BinaryFull"
+    )]
+    pub format: OutputFormat,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum OutputFormat {
+    BinaryFull,
+}
+
+fn output_format_from_str(s: &str) -> Result<OutputFormat, String> {
+    match s {
+        "binary-full" => Ok(OutputFormat::BinaryFull),
+        _ => Err(format!("Unknown format: {}", s)),
+    }
 }
 
 // Rewriting Config to handle custom radius vs GridSize clearer.
@@ -142,6 +170,9 @@ pub struct ResolvedConfig {
     pub output_dir: PathBuf,
     pub count_per_task: u32,
     pub tasks: Vec<(u8, Difficulty)>, // radius, difficulty
+    pub load_path: Option<PathBuf>,
+    pub display: bool,
+    pub format: OutputFormat,
 }
 
 impl Args {
@@ -196,6 +227,9 @@ impl Args {
             output_dir,
             count_per_task: count,
             tasks,
+            load_path: self.load.as_ref().map(PathBuf::from),
+            display: self.display,
+            format: self.format,
         }
     }
 }

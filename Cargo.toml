@@ -8,3 +8,4 @@ argh = "0.1.13"
 
 [dev-dependencies]
 googletest = "0.14.2"
+tempfile = "3.24.0"
