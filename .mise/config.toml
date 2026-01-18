@@ -1,0 +1,7 @@
+[tools]
+"aqua:nextest-rs/nextest/cargo-nextest" = "latest"
+rust = "latest"
+
+[tasks.test]
+description = "Run tests"
+run = "cargo nextest run"

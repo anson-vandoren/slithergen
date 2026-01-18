@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use argh::FromArgs;
@@ -6,7 +7,7 @@ use argh::FromArgs;
 ///
 /// Radius in this case assumes the center hex is r=0
 /// Therefore the number of tiles is 3r^2 + 3r + 1
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[repr(u8)]
 pub enum GridSize {
     #[default]
@@ -18,6 +19,17 @@ pub enum GridSize {
     Large = 8,
     /// Radius 11, 397 hexes
     Huge = 11,
+}
+
+impl GridSize {
+    pub fn all() -> &'static [GridSize] {
+        &[
+            GridSize::Small,
+            GridSize::Medium,
+            GridSize::Large,
+            GridSize::Huge,
+        ]
+    }
 }
 
 impl std::fmt::Display for GridSize {
@@ -50,7 +62,7 @@ impl FromStr for GridSize {
 }
 
 /// Relative difficulty of the puzzle
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Difficulty {
     /// roughly 15% of hints removed
     Easy,
@@ -59,6 +71,12 @@ pub enum Difficulty {
     #[default]
     /// As many hints as possible removed
     Hard,
+}
+
+impl Difficulty {
+    pub fn all() -> &'static [Difficulty] {
+        &[Difficulty::Easy, Difficulty::Medium, Difficulty::Hard]
+    }
 }
 
 impl std::fmt::Display for Difficulty {
@@ -85,7 +103,7 @@ impl FromStr for Difficulty {
 }
 
 /// Slitherlink map generator
-#[derive(FromArgs)]
+#[derive(FromArgs, Debug)]
 pub struct Args {
     /// hexagonal grid radius - exclusive with and takes precedence over size
     #[argh(option)]
@@ -98,48 +116,182 @@ pub struct Args {
     /// difficulty of the puzzle to be generated
     #[argh(option)]
     pub difficulty: Option<Difficulty>,
+
+    /// output directory for generated maps. defaults to "./maps"
+    #[argh(option, default = "String::from(\"./maps\")")]
+    pub output: String,
+
+    /// generate one of every size and difficulty. implied if no other filtering args are given
+    #[argh(switch)]
+    pub all: bool,
+
+    /// number of puzzles to generate per permutation
+    #[argh(option)]
+    pub count: Option<u32>,
+
+    /// positional count argument. if provided, behaves like --count and --all
+    #[argh(positional)]
+    pub count_pos: Option<u32>,
+}
+
+// Rewriting Config to handle custom radius vs GridSize clearer.
+// Actually, I will simplify: we generate a list of (Radius, Difficulty).
+// GridSize is just a helper for Radius.
+#[derive(Debug, PartialEq)]
+pub struct ResolvedConfig {
+    pub output_dir: PathBuf,
+    pub count_per_task: u32,
+    pub tasks: Vec<(u8, Difficulty)>, // radius, difficulty
 }
 
 impl Args {
-    pub fn new() -> Self {
-        let mut args: Args = argh::from_env();
-        let mut errs = Vec::new();
-        if args.radius.is_none() && args.size.is_none() {
-            errs.push("No radius or size given, using default size 'small'");
-            args.size = Some(GridSize::Small);
-        }
-        if args.radius.is_some() && args.size.is_some() {
-            errs.push("Both radius and size given, going with radius");
-            args.size = None;
-            args.radius = Some(args.radius.unwrap());
+    pub fn normalize(&self) -> ResolvedConfig {
+        let count = self.count_pos.or(self.count).unwrap_or(1);
+        let output_dir = PathBuf::from(&self.output);
+
+        let specific_size_or_radius = self.size.is_some() || self.radius.is_some();
+        let specific_difficulty = self.difficulty.is_some();
+        let force_all = self.all || self.count_pos.is_some();
+
+        // Logic for Radii
+        let final_radii: Vec<u8> = if specific_size_or_radius {
+            if let Some(r) = self.radius {
+                vec![r]
+            } else {
+                vec![self.size.unwrap() as u8]
+            }
+        } else if force_all || !specific_difficulty {
+            GridSize::all().iter().map(|s| *s as u8).collect()
+        } else {
+            // Default fallthrough: If we are here, specific_difficulty is true, but size is not specified.
+            // "If a single numeric arg is given with no flag... assume --all flag" -> handled by force_all
+            // "If no args are given... default to one of each size/type" -> handled by !specific_difficulty check above? NO.
+            // If no args given: specific_size=false, specific_diff=false, force_all=false.
+            // !specific_diff is true. So we go to GridSize::all(). Correct.
+
+            // Case: `slithergen --difficulty hard`.
+            // specific_size=false, specific_diff=true, force_all=false.
+            // Falls through to here.
+            // We should default to ALL sizes if not specified?
+            // "If no args are given, default output folder and default to one of each size/type"
+            // Implies default is ALL. So if I only constrain difficulty, size remains ALL.
+            GridSize::all().iter().map(|s| *s as u8).collect()
+        };
+
+        // Logic for Difficulties
+        let final_difficulties: Vec<Difficulty> = if specific_difficulty {
+            vec![self.difficulty.unwrap()]
+        } else {
+            Difficulty::all().to_vec()
+        };
+
+        let mut tasks = Vec::new();
+        for &r in &final_radii {
+            for &d in &final_difficulties {
+                tasks.push((r, d));
+            }
         }
 
-        if args.difficulty.is_none() {
-            errs.push("No difficulty given, using default difficulty 'hard'");
-            args.difficulty = Some(Difficulty::Hard);
+        ResolvedConfig {
+            output_dir,
+            count_per_task: count,
+            tasks,
         }
-
-        // print in yellow using ansi escape codes
-        if errs.len() > 0 {
-            println!("\x1b[33m{}\x1b[0m", errs.join("\n"));
-        }
-
-        args
     }
 }
 
-impl std::fmt::Display for Args {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let radius = self.radius.unwrap();
-        let size = self
-            .size
-            .map(|s| s.to_string())
-            .unwrap_or("unknown".to_owned());
-        let difficulty = self.difficulty.unwrap();
-        write!(
-            f,
-            "Generate a map with radius: {} ({}), difficulty: {}",
-            radius, size, difficulty
-        )
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use googletest::prelude::*;
+
+    #[googletest::test]
+    fn no_args_uses_all() -> Result<()> {
+        let args = Args::from_args(&[], &[]).unwrap();
+        let config = args.normalize();
+
+        expect_that!(config.count_per_task, eq(1));
+        // Use matches_pattern or eq reference for PathBuf
+        expect_that!(config.output_dir, eq(&PathBuf::from("./maps")));
+        // Should be all 4 sizes * 3 difficulties = 12 tasks
+        expect_that!(config.tasks, len(eq(12)));
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn single_numeric_arg_implies_count_and_all() -> Result<()> {
+        let args = Args::from_args(&[], &["5"]).unwrap();
+        let config = args.normalize();
+
+        expect_that!(config.count_per_task, eq(5));
+        expect_that!(config.tasks, len(eq(12))); // All implied
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn explicit_all_flag_sets_count_one() -> Result<()> {
+        let args = Args::from_args(&[], &["--all"]).unwrap();
+        let config = args.normalize();
+
+        expect_that!(config.count_per_task, eq(1));
+        expect_that!(config.tasks, len(eq(12)));
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn specific_size_filters_tasks() -> Result<()> {
+        let args = Args::from_args(&[], &["--size", "small"]).unwrap();
+        let config = args.normalize();
+
+        // Specific size, default difficulties (all 3)
+        expect_that!(config.tasks, len(eq(3)));
+        let radii: Vec<u8> = config.tasks.iter().map(|(r, _)| *r).collect();
+        expect_that!(radii, each(eq(&(GridSize::Small as u8))));
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn specific_difficulty_filters_tasks() -> Result<()> {
+        let args = Args::from_args(&[], &["--difficulty", "hard"]).unwrap();
+        let config = args.normalize();
+
+        // Default sizes (all 4), specific difficulty
+        expect_that!(config.tasks, len(eq(4)));
+        let difficulties: Vec<Difficulty> = config.tasks.iter().map(|(_, d)| *d).collect();
+        expect_that!(difficulties, each(eq(&Difficulty::Hard)));
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn specific_size_and_diff_singles_task() -> Result<()> {
+        let args = Args::from_args(&[], &["--size", "huge", "--difficulty", "easy"]).unwrap();
+        let config = args.normalize();
+
+        expect_that!(config.tasks, len(eq(1)));
+        expect_that!(
+            config.tasks,
+            elements_are![eq(&(GridSize::Huge as u8, Difficulty::Easy))]
+        );
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn numeric_arg_with_filter_combines() -> Result<()> {
+        // "5 --size small"
+        let args = Args::from_args(&[], &["5", "--size", "small"]).unwrap();
+        let config = args.normalize();
+
+        expect_that!(config.count_per_task, eq(5));
+        // Small size, all difficulties (3)
+        expect_that!(config.tasks, len(eq(3)));
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn custom_output_dir() -> Result<()> {
+        let args = Args::from_args(&[], &["--output", "foo/bar"]).unwrap();
+        let config = args.normalize();
+        expect_that!(config.output_dir, eq(&PathBuf::from("foo/bar")));
+        Ok(())
     }
 }
