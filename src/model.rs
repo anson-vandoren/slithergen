@@ -1,7 +1,8 @@
+use serde::Serialize;
 use std::collections::HashMap;
 
 /// Axial coordinates (q, r)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub struct Coord {
     pub q: i8,
     pub r: i8,
@@ -14,7 +15,7 @@ impl Coord {
 }
 
 /// Region type for a cell (Inside or Outside loop)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Region {
     Inside,
     Outside,
@@ -22,7 +23,7 @@ pub enum Region {
 }
 
 /// A single hexagonal cell on the grid
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Cell {
     /// True region of the cell (Answer Key)
     pub region: Region,
@@ -43,7 +44,7 @@ impl Cell {
 }
 
 /// The game map
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Map {
     pub radius: u8,
     pub cells: HashMap<Coord, Cell>,

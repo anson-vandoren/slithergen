@@ -1,7 +1,8 @@
 mod args;
 pub mod io;
+// pub mod viewer; // Deprecated
 pub mod model;
-pub mod viewer;
+pub mod web_viewer;
 
 fn main() {
     let args: args::Args = argh::from_env();
@@ -18,7 +19,7 @@ fn main() {
             Ok(map) => {
                 println!("Loaded map with radius {}", map.radius);
                 if config.display {
-                    viewer::display_map(&map);
+                    web_viewer::show_map(&map);
                 }
             }
             Err(e) => eprintln!("Failed to load map: {}", e),
@@ -36,6 +37,8 @@ fn main() {
             config.count_per_task, task_count
         );
 
+        let mut displayed_first_map = false;
+
         for (radius, difficulty) in config.tasks {
             for i in 0..config.count_per_task {
                 // STUB: Replace with actual generation logic
@@ -47,8 +50,12 @@ fn main() {
                         .insert(coord, model::Cell::new(model::Region::Inside, 3, true));
                 }
 
-                if config.display && config.count_per_task == 1 && task_count == 1 {
-                    viewer::display_map(&map);
+                if config.display && !displayed_first_map {
+                    web_viewer::show_map(&map);
+                    displayed_first_map = true;
+                    if task_count > 1 || config.count_per_task > 1 {
+                        println!("(Displaying only the first generated map)");
+                    }
                 }
 
                 // Save

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slitherlink Map Viewer</title>
+    <style>
+      :root {
+        --bg-color: #2e3440;
+        --hex-stroke: #4c566a;
+        --text-color: #eceff4;
+        --inside-color: #ebcb8b; /* Yellow */
+        --outside-color: #b48ead; /* Purple */
+        --line-color: #d8dee9;
+        --clue-color: #2e3440;
+      }
+
+      body {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        overflow: hidden;
+      }
+
+      h1 {
+        margin-bottom: 10px;
+        font-weight: 300;
+      }
+
+      #controls {
+        margin-bottom: 20px;
+        display: flex;
+        gap: 15px;
+        background: #3b4252;
+        padding: 10px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      label {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      canvas {
+        background-color: #3b4252;
+        border-radius: 8px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        cursor: grab;
+      }
+
+      canvas:active {
+        cursor: grabbing;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Slitherlink Viewer</h1>
+
+    <div id="controls">
+      <label>
+        <input type="checkbox" id="show-solution" checked />
+        Show Solution (Colors)
+      </label>
+      <label>
+        <input type="checkbox" id="show-clues" checked />
+        Show Clues
+      </label>
+      <label>
+        <input type="checkbox" id="show-coords" />
+        Show Coords
+      </label>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+      // Data injected by Rust
+      const mapData = /* DATA_PLACEHOLDER */ null;
+
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const controls = {
+        showSolution: document.getElementById('show-solution'),
+        showClues: document.getElementById('show-clues'),
+        showCoords: document.getElementById('show-coords'),
+      };
+
+      let camera = { x: 0, y: 0, zoom: 1 };
+      const HEX_SIZE = 30;
+
+      // Resize canvas
+      function resize() {
+        canvas.width = window.innerWidth * 0.9;
+        canvas.height = window.innerHeight * 0.8;
+        draw();
+      }
+      window.addEventListener('resize', resize);
+
+      // Pan/Zoom
+      let isDragging = false;
+      let lastPos = { x: 0, y: 0 };
+
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        lastPos = { x: e.clientX, y: e.clientY };
+      });
+
+      window.addEventListener('mouseup', () => (isDragging = false));
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - lastPos.x;
+        const dy = e.clientY - lastPos.y;
+        camera.x += dx;
+        camera.y += dy;
+        lastPos = { x: e.clientX, y: e.clientY };
+        draw();
+      });
+
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const scale = e.deltaY > 0 ? 0.9 : 1.1;
+        camera.zoom *= scale;
+        draw();
+      });
+
+      // Hex helpers
+      function axialToPixel(q, r, size) {
+        const x = size * ((3 / 2) * q);
+        const y = size * ((Math.sqrt(3) / 2) * q + Math.sqrt(3) * r);
+        return { x, y };
+      }
+
+      function drawHex(x, y, size, color, stroke = true) {
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle_deg = 60 * i;
+          const angle_rad = (Math.PI / 180) * angle_deg;
+          const px = x + size * Math.cos(angle_rad);
+          const py = y + size * Math.sin(angle_rad);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+
+        if (color) {
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+
+        if (stroke) {
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--hex-stroke');
+          ctx.stroke();
+        }
+      }
+
+      function draw() {
+        // Clear
+        ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-color'); // Using body bg for "void"
+        ctx.fillStyle = '#2e3440'; // Force dark background for canvas
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (!mapData) return;
+
+        // Center camera initially if 0,0
+        const centerX = canvas.width / 2 + camera.x;
+        const centerY = canvas.height / 2 + camera.y;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.scale(camera.zoom, camera.zoom);
+
+        const R = mapData.radius;
+        // Iterate all cells from mapData.cells object
+        // mapData.cells is: { "coord_string": { ... } } if JSON'd defaults?
+        // Actually Rust HashMap<Coord, Cell> converts to JSON object with string keys if key is string?
+        // But Coord is struct. JSON keys must be strings.
+        // Wait, serde_json map keys must be strings. default implementation might fail if Coord isn't string!
+        // I need to check serialization of HashMap<Coord, ...>.
+        // Rust will likely fail or serialize as sequence of [key, value] pairs depending on config.
+        // Let's assume standard behavior: we might need to iterate an array if it serializes to array.
+
+        // Assuming we fix Rust side to ensure it's iterable.
+        // Let's assume we get an object or array.
+
+        mapData.cells.forEach((item) => {
+          const q = item.coords.q;
+          const r = item.coords.r;
+          const cell = item.cell;
+
+          const pos = axialToPixel(q, r, HEX_SIZE);
+
+          // Determine color
+          let color = null;
+          if (controls.showSolution.checked) {
+            color =
+              cell.region === 'Inside'
+                ? getComputedStyle(document.body).getPropertyValue('--inside-color')
+                : getComputedStyle(document.body).getPropertyValue('--outside-color');
+          }
+
+          drawHex(pos.x, pos.y, HEX_SIZE, color);
+
+          // Clue
+          if (item.cell.clue_visible || controls.showClues.checked) {
+            // Force show if desired, or respect visibility
+            if (item.cell.clue_visible) {
+              ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--clue-color');
+              ctx.font = `bold ${HEX_SIZE}px sans-serif`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(cell.full_neighbor_count, pos.x, pos.y + 2);
+            }
+          }
+
+          // Coords
+          if (controls.showCoords.checked) {
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`${q},${r}`, pos.x, pos.y + HEX_SIZE / 1.5);
+          }
+        });
+
+        ctx.restore();
+      }
+
+      // Init
+      Object.values(controls).forEach((c) => c.addEventListener('change', draw));
+      resize();
+    </script>
+  </body>
+</html>
