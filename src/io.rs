@@ -61,10 +61,8 @@ pub fn load_map<P: AsRef<Path>>(path: P) -> io::Result<Map> {
     let mut iter = buffer.iter().skip(2);
 
     // Reconstruct utilizing the determinstic iteration order
-    // We create a temporary map to employ iter_coords, but we can't populate it while iterating?
-    // Actually, iter_coords is stateless based on radius.
-    let coords: Vec<Coord> = map.iter_coords().collect(); // Collect to avoid borrowing issues if we were populating map?
-    // Actually we are populating `map.cells`.
+    // iter_coords is stateless based on radius, so we can use it to rebuild keys.
+    let coords: Vec<Coord> = map.iter_coords().collect();
 
     for coord in coords {
         let byte = *iter

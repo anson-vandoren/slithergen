@@ -4,11 +4,10 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-/// We need a custom serialization structure for the Map because
-/// HashMap<Coord, ...> with non-string keys serializes to a map in JSON only if
-/// passing specific flags, or usually requires manual handling.
-/// The standard behavior for non-string keys is widely discouraged in JSON.
-/// We'll convert it to a flat list of cells for easier JS consumption.
+/// Custom serialization structure for the Map.
+/// We convert the HashMap<Coord, Cell> to a flat list of cells to ensure
+/// consistent JSON serialization and easier consumption in JavaScript,
+/// avoiding potential issues with non-string keys in JSON objects.
 #[derive(Serialize)]
 struct WebMap<'a> {
     radius: u8,
@@ -45,10 +44,7 @@ pub fn show_map(map: &Map) {
     // Inject data
     let html_content = template.replace("/* DATA_PLACEHOLDER */ null", &json_data);
 
-    // Write to temporary file (or output directory?)
-    // Let's write to "viewer.html" in the current directory for simplicity,
-    // or use a temp file if we just want to open it.
-    // For better DX, "slithergen_view.html" is clearer.
+    // Write to a temporary HTML file in the current directory.
     let output_path = Path::new("slithergen_view.html");
 
     let mut file = File::create(output_path).expect("Failed to create viewer file");

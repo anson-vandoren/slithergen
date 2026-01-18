@@ -103,7 +103,7 @@ impl FromStr for Difficulty {
 }
 
 /// Slitherlink map generator
-#[derive(FromArgs, Debug)]
+#[derive(Debug, FromArgs)]
 pub struct Args {
     /// hexagonal grid radius - exclusive with and takes precedence over size
     #[argh(option)]
@@ -150,7 +150,7 @@ pub struct Args {
     pub format: OutputFormat,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum OutputFormat {
     BinaryFull,
 }

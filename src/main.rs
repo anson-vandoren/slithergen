@@ -41,7 +41,7 @@ fn main() {
 
         for (radius, difficulty) in config.tasks {
             for i in 0..config.count_per_task {
-                // STUB: Replace with actual generation logic
+                // TODO: Replace with actual generation logic
                 let mut map = model::Map::new(radius);
                 // Fill with dummy data for testing viewer/io
                 let coords: Vec<model::Coord> = map.iter_coords().collect();
@@ -59,8 +59,30 @@ fn main() {
                 }
 
                 // Save
-                let filename = format!("slither_r{}_{:?}_{}.bin", radius, difficulty, i);
-                let path = config.output_dir.join(filename);
+                // Determine size folder name
+                let size_str = match radius {
+                    2 => "small",
+                    4 => "medium",
+                    8 => "large",
+                    11 => "huge",
+                    _ => "custom", // Fallback for custom radii
+                };
+                let size_dir = if size_str == "custom" {
+                    format!("radius_{}", radius)
+                } else {
+                    size_str.to_string()
+                };
+
+                let diff_str = difficulty.to_string(); // Difficulty implements Display
+
+                let save_dir = config.output_dir.join(&size_dir).join(&diff_str);
+                if let Err(e) = std::fs::create_dir_all(&save_dir) {
+                    eprintln!("Failed to create directory {:?}: {}", save_dir, e);
+                    continue;
+                }
+
+                let filename = format!("{}.bin", i);
+                let path = save_dir.join(filename);
                 if let Err(e) = io::save_map(&map, &path) {
                     eprintln!("Failed to save map to {:?}: {}", path, e);
                 }
