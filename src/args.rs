@@ -148,6 +148,10 @@ pub struct Args {
         default = "OutputFormat::BinaryFull"
     )]
     pub format: OutputFormat,
+
+    /// save maps in legacy format (no flags byte)
+    #[argh(switch)]
+    pub legacy: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -173,6 +177,7 @@ pub struct ResolvedConfig {
     pub load_path: Option<PathBuf>,
     pub display: bool,
     pub format: OutputFormat,
+    pub legacy: bool,
 }
 
 impl Args {
@@ -230,6 +235,7 @@ impl Args {
             load_path: self.load.as_ref().map(PathBuf::from),
             display: self.display,
             format: self.format,
+            legacy: self.legacy,
         }
     }
 }

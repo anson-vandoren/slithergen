@@ -1,6 +1,5 @@
 mod args;
 pub mod io;
-// pub mod viewer; // Deprecated
 pub mod model;
 pub mod web_viewer;
 
@@ -83,7 +82,7 @@ fn main() {
 
                 let filename = format!("{}.bin", i);
                 let path = save_dir.join(filename);
-                if let Err(e) = io::save_map(&map, &path) {
+                if let Err(e) = io::save_map(&map, &path, config.legacy) {
                     eprintln!("Failed to save map to {:?}: {}", path, e);
                 }
             }
