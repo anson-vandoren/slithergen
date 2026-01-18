@@ -1,4 +1,5 @@
 mod args;
+pub mod generator;
 pub mod io;
 pub mod model;
 pub mod web_viewer;
@@ -36,18 +37,15 @@ fn main() {
             config.count_per_task, task_count
         );
 
+        let generator: Box<dyn generator::Generator> = match config.strategy {
+            args::Strategy::Dummy => Box::new(generator::DummyGenerator),
+        };
+
         let mut displayed_first_map = false;
 
         for (radius, difficulty) in config.tasks {
             for i in 0..config.count_per_task {
-                // TODO: Replace with actual generation logic
-                let mut map = model::Map::new(radius);
-                // Fill with dummy data for testing viewer/io
-                let coords: Vec<model::Coord> = map.iter_coords().collect();
-                for coord in coords {
-                    map.cells
-                        .insert(coord, model::Cell::new(model::Region::Inside, 3, true));
-                }
+                let map = generator.generate(radius, difficulty);
 
                 if config.display && !displayed_first_map {
                     web_viewer::show_map(&map);

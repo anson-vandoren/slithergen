@@ -102,6 +102,32 @@ impl FromStr for Difficulty {
     }
 }
 
+/// Generation strategy
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Strategy {
+    #[default]
+    Dummy,
+}
+
+impl std::fmt::Display for Strategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Strategy::Dummy => f.write_str("dummy"),
+        }
+    }
+}
+
+impl FromStr for Strategy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "dummy" => Ok(Strategy::Dummy),
+            _ => Err(format!("Invalid strategy: {}", s)),
+        }
+    }
+}
+
 /// Slitherlink map generator
 #[derive(Debug, FromArgs)]
 pub struct Args {
@@ -152,6 +178,10 @@ pub struct Args {
     /// save maps in legacy format (no flags byte)
     #[argh(switch)]
     pub legacy: bool,
+
+    /// generation strategy (default: dummy)
+    #[argh(option, default = "Strategy::default()")]
+    pub strategy: Strategy,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -178,6 +208,7 @@ pub struct ResolvedConfig {
     pub display: bool,
     pub format: OutputFormat,
     pub legacy: bool,
+    pub strategy: Strategy,
 }
 
 impl Args {
@@ -236,6 +267,7 @@ impl Args {
             display: self.display,
             format: self.format,
             legacy: self.legacy,
+            strategy: self.strategy,
         }
     }
 }
@@ -332,6 +364,14 @@ mod tests {
         let args = Args::from_args(&[], &["--output", "foo/bar"]).unwrap();
         let config = args.normalize();
         expect_that!(config.output_dir, eq(&PathBuf::from("foo/bar")));
+        Ok(())
+    }
+
+    #[googletest::test]
+    fn default_strategy_is_dummy() -> Result<()> {
+        let args = Args::from_args(&[], &[]).unwrap();
+        let config = args.normalize();
+        expect_that!(config.strategy, eq(Strategy::Dummy));
         Ok(())
     }
 }
